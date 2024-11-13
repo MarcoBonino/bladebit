@@ -6,6 +6,9 @@
 #include "commands/Commands.h"
 #include "Version.h"
 
+#include <chrono>
+#include <thread>
+
 #if PLATFORM_IS_UNIX
     #include <sys/resource.h>
 #endif
@@ -33,10 +36,74 @@ void PlotValidatorPrintUsage();
 void PlotCompareMain( GlobalPlotConfig& gCfg, CliParser& cli );
 void PlotCompareMainPrintUsage();
 
+struct CommandResult {
+    std::string output;
+    int exitstatus;
+
+    friend std::ostream &operator<<(std::ostream &os, const CommandResult &result) {
+        os << "command exitstatus: " << result.exitstatus << " output: " << result.output;
+        return os;
+    }
+    bool operator==(const CommandResult &rhs) const {
+        return output == rhs.output &&
+               exitstatus == rhs.exitstatus;
+    }
+    bool operator!=(const CommandResult &rhs) const {
+        return !(rhs == *this);
+    }
+};
+
+class Command {
+
+public:
+    /**
+     * Execute system command and get STDOUT result.
+     * Like system() but gives back exit status and stdout.
+     * @param command system command to execute
+     * @return CommandResult containing STDOUT (not stderr) output & exitstatus
+     * of command. Empty if command failed (or has no output). If you want stderr,
+     * use shell redirection (2&>1).
+     */
+    static CommandResult exec(const std::string &command) {
+        int exitcode = 255;
+        std::array<char, 1048576> buffer {};
+        std::string result;
+#ifdef _WIN32
+#define popen _popen
+#define pclose _pclose
+#define WEXITSTATUS
+#endif
+        FILE *pipe = popen(command.c_str(), "r");
+        if (pipe == nullptr) {
+            throw std::runtime_error("popen() failed!");
+        }
+        try {
+            std::size_t bytesread;
+            while ((bytesread = fread(buffer.data(), sizeof(buffer.at(0)), sizeof(buffer), pipe)) != 0) {
+                result += std::string(buffer.data(), bytesread);
+            }
+        } catch (...) {
+            pclose(pipe);
+            throw;
+        }
+        exitcode = WEXITSTATUS(pclose(pipe));
+        return CommandResult{result, exitcode};
+    }
+};
+
+uint64_t getFreeSize(const std::string& plotOutFolder)
+{
+    const std::string getDstFreeSizeCmd = std::string("df -B1 ").append(plotOutFolder).append(" | awk '{print $4}' | tail -n 1");
+    Log::Line("MARCO_DEBUG executing command: %s", getDstFreeSizeCmd.c_str());
+    const uint64_t freeSize = std::stoull(Command::exec(getDstFreeSizeCmd).output);
+    Log::Line("MARCO_DEBUG There are %lld bytes available.", freeSize);
+    return freeSize;
+}
 
 //-----------------------------------------------------------
 int main( int argc, const char* argv[] )
 {
+    Log::Line("MARCO_CUSTOM_BUILD");
     // Install a crash handler to dump our stack traces
     SysHost::InstallCrashHandler();
 
@@ -116,6 +183,13 @@ int main( int argc, const char* argv[] )
 
         Log::Line( "Plot temporary file: %s", plotOutPath );
 
+        const uint64_t plotSizeC4 = 89000000000;
+        while (getFreeSize(plotOutFolder) < plotSizeC4)
+        {
+
+            Log::Line("MARCO_DEBUG Wait 20 seconds for free space...");
+            std::this_thread::sleep_for(std::chrono::seconds(20));
+        }
 
         if( cfg.showMemo )
         {
