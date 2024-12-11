@@ -6,8 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_CONFIGURATION_TYPES Release Debug)
 
-set(CMAKE_CUDA_HOST_COMPILER g++-13)
-
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release"
         CACHE STRING "Possible values are: Release, Debug"
