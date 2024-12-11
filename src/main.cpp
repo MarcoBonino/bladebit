@@ -8,7 +8,9 @@
 
 #include <chrono>
 #include <thread>
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 #if PLATFORM_IS_UNIX
     #include <sys/resource.h>
@@ -92,6 +94,7 @@ public:
     }
 };
 
+#ifdef _WIN32
 std::wstring ConvertToWString(const char* input) {
     int len = MultiByteToWideChar(CP_UTF8, 0, input, -1, nullptr, 0);
     if (len == 0) return L"";
@@ -100,6 +103,7 @@ std::wstring ConvertToWString(const char* input) {
     MultiByteToWideChar(CP_UTF8, 0, input, -1, &wstr[0], len);
     return wstr;
 }
+#endif
 
 uint64_t getFreeSize(const std::string& plotOutFolder)
 {
@@ -110,6 +114,7 @@ uint64_t getFreeSize(const std::string& plotOutFolder)
     return freeSize;
 }
 
+#ifdef _WIN32
 bool IsSpaceAvailable(const std::wstring& path, ULONGLONG thresholdBytes) {
     ULARGE_INTEGER freeBytesAvailable, totalBytes, totalFreeBytes;
 
@@ -120,6 +125,7 @@ bool IsSpaceAvailable(const std::wstring& path, ULONGLONG thresholdBytes) {
         return false;
     }
 }
+#endif
 
 //-----------------------------------------------------------
 int main( int argc, const char* argv[] )
