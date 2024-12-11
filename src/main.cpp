@@ -204,12 +204,13 @@ int main( int argc, const char* argv[] )
 
         Log::Line( "Plot temporary file: %s", plotOutPath );
 
-        const uint64_t plotSizeC4 = 89000000000;
+        // const uint64_t plotSizeC4 = 89000000000;
+        const uint64_t plotSizeC6 = 86000000000;
         while (
 #ifdef _WIN32
-            !IsSpaceAvailable(ConvertToWString(plotOutFolder), plotSizeC4)
+            !IsSpaceAvailable(ConvertToWString(plotOutFolder), plotSizeC6)
 #else
-            getFreeSize(plotOutFolder) < plotSizeC4
+            getFreeSize(plotOutFolder) < plotSizeC6
 #endif
             )
         {
