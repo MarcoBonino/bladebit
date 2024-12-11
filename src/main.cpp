@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <thread>
+#include <windows.h>
 
 #if PLATFORM_IS_UNIX
     #include <sys/resource.h>
@@ -91,6 +92,15 @@ public:
     }
 };
 
+std::wstring ConvertToWString(const char* input) {
+    int len = MultiByteToWideChar(CP_UTF8, 0, input, -1, nullptr, 0);
+    if (len == 0) return L"";
+
+    std::wstring wstr(len - 1, L'\0'); // Exclude null terminator
+    MultiByteToWideChar(CP_UTF8, 0, input, -1, &wstr[0], len);
+    return wstr;
+}
+
 uint64_t getFreeSize(const std::string& plotOutFolder)
 {
     const std::string getDstFreeSizeCmd = std::string("df -B1 ").append(plotOutFolder).append(" | awk '{print $4}' | tail -n 1");
@@ -98,6 +108,17 @@ uint64_t getFreeSize(const std::string& plotOutFolder)
     const uint64_t freeSize = std::stoull(Command::exec(getDstFreeSizeCmd).output);
     Log::Line("MARCO_DEBUG There are %lld bytes available.", freeSize);
     return freeSize;
+}
+
+bool IsSpaceAvailable(const std::wstring& path, ULONGLONG thresholdBytes) {
+    ULARGE_INTEGER freeBytesAvailable, totalBytes, totalFreeBytes;
+
+    if (GetDiskFreeSpaceExW(path.c_str(), &freeBytesAvailable, &totalBytes, &totalFreeBytes)) {
+        return freeBytesAvailable.QuadPart >= thresholdBytes;
+    } else {
+        std::wcerr << L"Failed to get disk space for path: " << path << L" (Error: " << GetLastError() << L")\n";
+        return false;
+    }
 }
 
 //-----------------------------------------------------------
@@ -184,7 +205,13 @@ int main( int argc, const char* argv[] )
         Log::Line( "Plot temporary file: %s", plotOutPath );
 
         const uint64_t plotSizeC4 = 89000000000;
-        while (getFreeSize(plotOutFolder) < plotSizeC4)
+        while (
+#ifdef _WIN32
+            !IsSpaceAvailable(ConvertToWString(plotOutFolder), plotSizeC4)
+#else
+            getFreeSize(plotOutFolder) < plotSizeC4
+#endif
+            )
         {
 
             Log::Line("MARCO_DEBUG Wait 20 seconds for free space...");
